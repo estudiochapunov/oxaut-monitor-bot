@@ -25,7 +25,7 @@ STEPS_5MIN = 30  # 5 minutos
 
 HISTORY_MAXLEN = STEPS_5MIN + 2  # por las dudas
 
-TELEGRAM_TOKEN = "8398452653:AAE1Wr4f75HIlYqsqYd-k4bFVxseMzSz04s"
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 
 # Global state
 logged_on = False
