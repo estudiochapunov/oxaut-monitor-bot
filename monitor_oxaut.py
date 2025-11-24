@@ -5,7 +5,7 @@ from collections import deque
 import os
 import json
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue
 
 # ---------------- CONFIG ----------------
 DEXSCREENER_URL = (
@@ -140,7 +140,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(status_msg)
 
 def main():
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_TOKEN).job_queue(JobQueue()).build()
 
     application.add_handler(CommandHandler("logon", logon))
     application.add_handler(CommandHandler("logoff", logoff))
