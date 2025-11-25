@@ -131,7 +131,10 @@ async def logon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Ya estás logueado.")
         return
     logged_on = True
-    history.clear()
+    if hasattr(history, 'clear'):
+        history.clear()
+    else:
+        history = deque(maxlen=HISTORY_MAXLEN)  # Reinicializar si hay problema
     try:
         price = get_price_usd()
         last_price = price
@@ -214,7 +217,7 @@ Comandos disponibles:
     await update.message.reply_text(help_text)
 
 def main():
-    application = Application.builder().token(TELEGRAM_TOKEN).job_queue(JobQueue()).build()
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
 
     application.add_handler(CommandHandler("logon", logon))
     application.add_handler(CommandHandler("logoff", logoff))
