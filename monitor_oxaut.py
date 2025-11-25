@@ -135,9 +135,9 @@ async def logon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         price = get_price_usd()
         last_price = price
-        await send_message(context, chat_id, f"Log activado. Precio actual: {price:.2f} USD")
+        await update.message.reply_text(f"Log activado. Precio actual: {price:.2f} USD")
         # Start monitoring job
-        context.job_queue.run_repeating(monitor_job, interval=INTERVAL_SECONDS, first=0, chat_id=chat_id)
+        context.job_queue.run_repeating(monitor_job, interval=config.interval_seconds, first=0, chat_id=chat_id)
     except Exception as e:
         await update.message.reply_text(f"Error activando log: {e}")
         logged_on = False
