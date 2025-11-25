@@ -27,7 +27,20 @@ HISTORY_MAXLEN = STEPS_5MIN + 2  # por las dudas
 
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 
+class BotConfig:
+    def __init__(self):
+        self.drop_threshold = 0.25
+        self.interval_seconds = 10
+        self.active_windows = ['10s', '30s', '1min', '5min']
+
+    def update_threshold(self, new_threshold):
+        if 0 < new_threshold <= 1:
+            self.drop_threshold = new_threshold
+            return True
+        return False
+
 # Global state
+config = BotConfig()
 logged_on = False
 history = deque(maxlen=HISTORY_MAXLEN)
 last_price = None
@@ -67,14 +80,14 @@ def log_price(timestamp, price):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(line)
 
-def check_drops(history, now, current_price):
+def check_drops(history, now, current_price, config):
     alerts = []
     def compare(step_back, label):
-        if len(history) > step_back:
+        if label in config.active_windows and len(history) > step_back:
             past_price = history[-(step_back + 1)][1]
             if past_price > 0:
                 change = (current_price - past_price) / past_price
-                if change <= -DROP_THRESHOLD:
+                if change <= -config.drop_threshold:
                     alerts.append((label, past_price, change))
     compare(STEPS_10S,  "10s")
     compare(STEPS_30S,  "30s")
@@ -93,7 +106,7 @@ async def monitor_job(context: ContextTypes.DEFAULT_TYPE):
         print(f"[{now.isoformat()}] Precio oXAUT: {price:.2f} USD")
         log_price(now, price)
         history.append((now, price))
-        alerts = check_drops(history, now, price)
+        alerts = check_drops(history, now, price, config)
         if alerts:
             msg = (
                 f"POZO ACTIVADO en oXAUT a las {now.isoformat()}.\n"
@@ -144,12 +157,72 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         status_msg += f"\nÚltimo precio: {last_price:.2f} USD"
     await update.message.reply_text(status_msg)
 
+async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        current_price = get_price_usd()
+        await update.message.reply_text(f"Precio actual de oXAUT: {current_price:.2f} USD")
+    except Exception as e:
+        await update.message.reply_text(f"Error obteniendo precio: {e}")
+
+async def setthreshold(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global config
+    if not context.args:
+        await update.message.reply_text(f"Umbral actual: {config.drop_threshold * 100:.0f}%\nUso: /setthreshold <porcentaje> (ej: /setthreshold 20)")
+        return
+    try:
+        new_pct = float(context.args[0])
+        if config.update_threshold(new_pct / 100):
+            await update.message.reply_text(f"Umbral actualizado a {new_pct:.0f}%")
+        else:
+            await update.message.reply_text("Porcentaje inválido. Debe ser entre 1 y 100.")
+    except ValueError:
+        await update.message.reply_text("Uso: /setthreshold <porcentaje> (ej: /setthreshold 20)")
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global history
+    if not history:
+        await update.message.reply_text("No hay historial disponible.")
+        return
+    minutes = 5  # default
+    if context.args:
+        try:
+            minutes = int(context.args[0])
+        except ValueError:
+            pass
+    # Show last N minutes (approx 6 entries per minute)
+    entries = int(minutes * 6)
+    recent = list(history)[-entries:]
+    if not recent:
+        await update.message.reply_text("No hay datos suficientes para ese período.")
+        return
+    msg = f"Historial de precios (últimos {minutes} min):\n"
+    for ts, p in recent:
+        msg += f"{ts.strftime('%H:%M:%S')}: {p:.2f} USD\n"
+    await update.message.reply_text(msg)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    help_text = """
+Comandos disponibles:
+/logon - Inicia monitoreo de precios
+/logoff - Detiene monitoreo
+/status - Muestra estado actual
+/price - Precio actual inmediato
+/setthreshold <%> - Cambia umbral de caída (ej: /setthreshold 20)
+/history [min] - Historial de precios (últimos min, default 5)
+/help - Muestra esta ayuda
+    """
+    await update.message.reply_text(help_text)
+
 def main():
     application = Application.builder().token(TELEGRAM_TOKEN).job_queue(JobQueue()).build()
 
     application.add_handler(CommandHandler("logon", logon))
     application.add_handler(CommandHandler("logoff", logoff))
     application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("price", price))
+    application.add_handler(CommandHandler("setthreshold", setthreshold))
+    application.add_handler(CommandHandler("history", history))
+    application.add_handler(CommandHandler("help", help_command))
 
     print("Bot iniciado. Esperando comandos...")
     application.run_polling()
