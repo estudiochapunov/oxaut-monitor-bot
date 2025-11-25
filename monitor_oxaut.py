@@ -135,7 +135,7 @@ async def logon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         price = get_price_usd()
         last_price = price
-        await update.message.reply_text(f"Log activado. Precio actual: {price:.2f} USD")
+        await context.bot.send_message(chat_id=chat_id, text=f"Log activado. Precio actual: {price:.2f} USD")
         # Start monitoring job
         context.job_queue.run_repeating(monitor_job, interval=config.interval_seconds, first=0, chat_id=chat_id)
     except Exception as e:
